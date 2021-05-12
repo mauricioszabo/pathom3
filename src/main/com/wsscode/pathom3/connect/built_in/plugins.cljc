@@ -30,8 +30,9 @@
    (fn attribute-errors-plugin-wrap-run-graph-external [run-graph!]
      (fn attribute-errors-plugin-wrap-run-graph-internal [env ast-or-graph entity-tree*]
        (clet [res (run-graph! env ast-or-graph entity-tree*)]
-         (let [stats (-> res meta :com.wsscode.pathom3.connect.runner/run-stats)]
-           (if (get-in stats [::pcr/node-run-stats ::pcr/nodes-with-error])
+         (let [stats (assoc (-> res meta :com.wsscode.pathom3.connect.runner/run-stats)
+                       ::pcr/env env)]
+           (if (or true (get-in stats [::pcr/node-run-stats ::pcr/nodes-with-error]))
              (let [smart-stats (psm/smart-run-stats stats)
                    ast         (-> stats :com.wsscode.pathom3.connect.planner/index-ast)
                    errors      (into {}

@@ -6,8 +6,11 @@
     [com.wsscode.pathom3.connect.indexes :as pci]
     [com.wsscode.pathom3.connect.operation :as pco]
     [com.wsscode.pathom3.connect.runner :as pcr]
+    [com.wsscode.pathom3.format.eql :as pf.eql]
     [com.wsscode.pathom3.interface.eql :as p.eql]
-    [com.wsscode.pathom3.plugin :as p.plugin]))
+    [com.wsscode.pathom3.plugin :as p.plugin]
+    [com.wsscode.promesa.bridges.core-async :refer [error?]]
+    [matcher-combinators.standalone :as mcs]))
 
 (deftest attribute-errors-plugin-test
   (let [err (ex-info "Err" {})]
@@ -52,7 +55,16 @@
              (-> (pci/register (pbir/constantly-resolver :foo "bar"))
                  (p.plugin/register (pbip/attribute-errors-plugin)))
              [:foo])
-           {:foo "bar"}))))
+           {:foo "bar"})))
+
+  (testing "only missing"
+    (is (mcs/match?
+          {::pcr/attribute-errors
+           {:foo2 error?}}
+          (p.eql/process
+            (-> (pci/register (pbir/constantly-resolver :foo "bar"))
+                (p.plugin/register (pbip/attribute-errors-plugin)))
+            [:foo2])))))
 
 (deftest remove-stats-plugin-test
   (let [res (p.eql/process

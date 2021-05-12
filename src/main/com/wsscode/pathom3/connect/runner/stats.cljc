@@ -48,33 +48,39 @@
 
 ; region errors
 
+(defn node-attribute-error
+  [{::pcr/keys [node-run-stats] :as env} node-id]
+  (let [error (get-in node-run-stats [node-id ::pcr/node-error])]
+    (if error
+      {::attribute-error
+       {::node-error-type ::node-error-type-direct
+        ::pcr/node-error  error}}
+
+      (if-let [[nid error] (->> (pcp/node-ancestors env node-id)
+                                (some #(if-let [err (get-in node-run-stats [% ::pcr/node-error])]
+                                         [% err])))]
+        {::attribute-error
+         {::node-error-type ::node-error-type-ancestor
+          ::node-error-id   nid
+          ::pcr/node-error  error}}))))
+
 (pco/defresolver attribute-error
   "Find the error for a node, it first try to find the error in the node itself, but
   also walks up the graph to collect errors on previous nodes."
-  [{::pcr/keys [node-run-stats] ::pcp/keys [index-attrs] :as env}
+  [{::pcp/keys [index-attrs available-data] :as env}
    {::p.attr/keys [attribute]}]
   {::pco/output [::attribute-error]}
-  ; TODO: due to planner changes now an attribute may be present in many places
-  ; of the graph, due to that this algorithm needs to be adapted to handle this
-  ; situation. the current change is a lazy one just to try the first
-  (if-let [node-id (first (get index-attrs attribute))]
-    (let [error (get-in node-run-stats [node-id ::pcr/node-error])]
-      (if error
-        {::attribute-error
-         {::node-error-type ::node-error-type-direct
-          ::pcr/node-error  error}}
-
-        (if-let [[nid error] (->> (pcp/node-ancestors env node-id)
-                                  (some #(if-let [err (get-in node-run-stats [% ::pcr/node-error])]
-                                           [% err])))]
-          {::attribute-error
-           {::node-error-type ::node-error-type-ancestor
-            ::node-error-id   nid
-            ::pcr/node-error  error}})))
-    {::attribute-error
-     {::node-error-type ::node-error-type-unreachable
-      ::pcr/node-error  (ex-info (str "Can't find a path for " attribute)
-                                 {::p.attr/attribute attribute})}}))
+  (if-let [node-ids (get index-attrs attribute)]
+    (some #(node-attribute-error env %) node-ids)
+    (if-not (contains? available-data attribute)
+      {::attribute-error
+       (if (-> env ::pcr/env ::pci/index-attributes (contains? attribute))
+         {::node-error-type ::node-error-type-unreachable
+          ::pcr/node-error  (ex-info (str "Attribute " attribute " is indexed but can't be reached with current data.")
+                                     {::p.attr/attribute attribute})}
+         {::node-error-type ::node-error-type-unavailable
+          ::pcr/node-error  (ex-info (str "Attribute " attribute " is not available in this index.")
+                                     {::p.attr/attribute attribute})})})))
 
 ; endregion
 
