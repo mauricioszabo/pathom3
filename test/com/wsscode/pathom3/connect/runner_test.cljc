@@ -439,6 +439,40 @@
               [:y :value]
               {:x 1, :y 2, :value 2})))
 
+      (testing "BUG"
+        (is (graph-response?
+             (pci/register
+              [(pco/resolver `lower-output-resolver
+                             {::pco/input [:lower-requisite]
+                              ::pco/output [:output]
+                              ::pco/priority 0}
+                             (fn [env inputs]
+                               (prn :PRIORITY-0)
+                               {:output 0}))
+               (pco/resolver `higher-output-resolver
+                             {::pco/input    [:higher-requisite]
+                              ::pco/output   [:output]
+                              ::pco/priority 1}
+                             (fn [_ inputs]
+                               (prn :PRIORITY-1)
+                               {:output 1}))
+               (pco/resolver `repl-kind-from-config
+                             {::pco/input    [:unused-attr]
+                              ::pco/output   [:lower-requisite]
+                              ::pco/priority 1}
+                             (fn [{:keys [config/eval-as]}]
+                               {:lower-requisite eval-as}))
+               (pco/resolver `seed-data
+                             {::pco/input    []
+                              ::pco/output   [:unused-attr :higher-requisite]
+                              ::pco/priority 99}
+                             (fn [_ _]
+                               {:lower-requisite :whatever
+                                :higher-requisite :im-needed}))])
+             {}
+             [:higher-requisite :output]
+             {:repl/namespace 1})))
+
       (testing "distinct inputs"
         (is (graph-response?
               (pci/register
